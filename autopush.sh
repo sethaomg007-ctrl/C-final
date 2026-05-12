@@ -6,6 +6,7 @@ if [ -z $message ] ; then
     exit 1 
 fi 
 
+git pull origin $(git branch --show-current)
 git add . 
 git commit -m  "$message"
 git push -u origin $(git branch --show-current) 
