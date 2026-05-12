@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <iostream>
+#include <string>
 #include <tabulate/table.hpp>
 #include <xlnt/xlnt.hpp>
 using namespace std;
@@ -10,19 +11,27 @@ using namespace tabulate;
 // Student Class
 class Student {
 private:
+  string id;
   string name;
-  int age;
+  int age; // maybe add more like , id, gender
+  string gender;
 
 public:
-  Student(string name, int age) {
+  Student(string id, string name, int age, string gender) {
+    this->id = id;
     this->name = name;
     this->age = age;
+    this->gender = gender;
   }
+  string getId() const { return id; }
   string getName() const { return name; }
   int getAge() const { return age; }
+  string getGender() const { return gender; }
 
+  void setId(string id) { this->id = id; }
   void setName(string name) { this->name = name; }
   void setAge(int age) { this->age = age; }
+  void setGender(string gender) { this->gender = gender; }
 };
 
 //  user class for login system
@@ -48,8 +57,9 @@ User *loggedInUser = nullptr; // nullptr means no user is logged in
 
 // predefined users
 vector<User> userDatabase = {
-    User("admin", "admin123", "admin"), User("student", "stu123", "student"),
-    User("teacher", "tea123", "student") // teacher has same access as student
+    User("admin", "admin123", "admin"), 
+    User("student", "student123", "student"),
+    User("teacher", "teacher123", "teacher") // teacher has same access as student
 };
 
 //  printMenu
@@ -82,12 +92,17 @@ void printStudentTable(vector<Student> studentsList) {
     int end = min(start + pageSize, (int)studentsList.size());
 
     Table table;
-    table.add_row({"#", "Name", "Age"});
+    table.add_row({"#", "ID", "Name", "Age", "Gender"});
     table[0].format().font_style({FontStyle::bold});
 
     for (int i = start; i < end; i++) {
-      table.add_row({to_string(i + 1), studentsList[i].getName(),
-                     to_string(studentsList[i].getAge())});
+      table.add_row({
+        to_string(i + 1), 
+        studentsList[i].getId(), 
+        studentsList[i].getName(),  
+        to_string(
+        studentsList[i].getAge()), 
+        studentsList[i].getGender()});
     }
     cout << table << endl;
 
@@ -118,14 +133,18 @@ void writeVectorToExcel(string filename, vector<Student> students) {
   ws.title("Sheet1");
 
   // table header
-  ws.cell("A1").value("Name");
-  ws.cell("B1").value("Age");
+  ws.cell("A1").value("ID");
+  ws.cell("B1").value("Name");
+  ws.cell("C1").value("Age");
+  ws.cell("D1").value("Gender");
 
   // Enter all the data into row
   int row = 2;
   for (auto student : students) {
-    ws.cell("A" + to_string(row)).value(student.getName());
-    ws.cell("B" + to_string(row)).value(student.getAge());
+    ws.cell("A" + to_string(row)).value(student.getId());
+    ws.cell("B" + to_string(row)).value(student.getName());
+    ws.cell("C" + to_string(row)).value(student.getAge());
+    ws.cell("D" + to_string(row)).value(student.getGender());
     row++;
   }
   wb.save(filename);
@@ -146,17 +165,36 @@ vector<Student> readStudentsFromExcel(const string &filename) {
   // open sheet , loop through row and convert to vector
   xlnt::worksheet ws = wb.active_sheet(); // Sheet1
   for (auto row : ws.rows(false)) {
+    
     // skip table header
-    if (row[0].to_string() == "Name")
+    if (row[0].to_string() == "ID")
       continue;
+    
+      // skip empty rows
+    if (row[0].to_string().empty() ||
+        row[1].to_string().empty() ||
+        row[2].to_string().empty() ||
+        row[3].to_string().empty()) continue; 
 
+        
+    // wrap in try-catch so bad data never crashes the program   
+  try {
+    string id;
     string name;
     int age;
-    name = row[0].to_string();
-    age = stoi(row[1].to_string());
+    string gender;
+    id = row[0].to_string();
+    name = row[1].to_string();
+    age = stoi(row[2].to_string());
+    gender = row[3].to_string();
 
-    Student student(name, age);
-    students.push_back(student);
+    
+    
+    students.push_back(Student(id, name, age, gender));
+} catch (...){
+  cout << "Skipping bad data row in excel file!! ❌" << endl;
+  continue;
+}
   }
   return students;
 }
@@ -194,7 +232,7 @@ void logout() {
   loggedInUser = nullptr;
 }
 
-// SECTION 10: Sort function
+//  Sort function
 
 void sortStudents(vector<Student> &students) {
   cout << "Sort by: " << endl;
@@ -261,7 +299,7 @@ int main() {
 
   // Build menus based on role
   vector<string> programMenu = {
-    "Insert new student", // 1 - admin only                           
+    "Enter new student", // 1 - admin only                           
     "Edit Student info",  // 2 - admin only                                
     "Delete Student",     // 3 - admin only                              
     "Show All Students",  // 4 - everyone                       
@@ -276,7 +314,9 @@ int main() {
       "Logout"             // 4 - everyone
   };
 
-  bool isAdmin = loggedInUser->getRole() == "admin";
+  bool isAdmin = (loggedInUser->getRole() == "admin" || 
+                  loggedInUser->getRole() == "teacher"); // teacher has same access as admin for this demo
+
 
   int option;
 
@@ -298,15 +338,21 @@ int main() {
 
       //  Enter (admin only)
       case 1: {
+        string  id;
         string name;
         int age;
+        string gender;
+
+        cout << "Enter Student ID: ";
+        cin >> id;
         cout << "Enter Student Name: ";
         cin.ignore();
         getline(cin, name);
         cout << "Enter Student Age : ";
         cin >> age;
-
-        studentLists.push_back(Student(name, age));
+        cout << "Enter Student Gender : ";
+        cin >> gender;
+        studentLists.push_back(Student(id, name, age, gender));
         writeVectorToExcel(filename, studentLists);
       } break;
 
@@ -320,17 +366,24 @@ int main() {
           cout << "Invalid row number ❌" << endl;
           break;
         }
-
+        string id;
         string name;
         int age;
+        string gender;
+        cout << "Enter new Student ID: ";
+        cin >> id;
         cout << "Enter new Student Name: ";
         cin.ignore();
         getline(cin, name);
         cout << "Enter new Student Age : ";
         cin >> age;
+        cout << "Enter new Student Gender : ";
+        cin >> gender;
 
+        studentLists[row - 1].setId(id);
         studentLists[row - 1].setName(name);
         studentLists[row - 1].setAge(age);
+        studentLists[row - 1].setGender(gender);
         writeVectorToExcel(filename, studentLists);
       } break;
 
@@ -356,13 +409,13 @@ int main() {
       } break;
 
       //  Show all (with pagination) 
-      //  FIX: now passes studentLists (was studentList)
+      
       case 4: {
         printStudentTable(studentLists);
       } break;
 
       //  Search 
-      //  FIX: now searches studentLists (was studentList)
+      
       case 5: {
         string searchName;
         cout << "Enter Student Name to search : ";
@@ -373,8 +426,10 @@ int main() {
         for (Student &student : studentLists) {
           if (student.getName() == searchName) {
             cout << "Student Found ✅" << endl;
+            cout << "ID   : " << student.getId() << endl;
             cout << "Name : " << student.getName() << endl;
             cout << "Age  : " << student.getAge() << endl;
+            cout << "Gender : " << student.getGender() << endl;
             found = true;
             break;
           }
@@ -408,7 +463,7 @@ int main() {
       // Remap student menu numbers to shared logic
       switch (option) {
 
-      //  Show all ──────────────────────────
+      //  Show all 
       case 1: {
         printStudentTable(studentLists);
       } break;
@@ -424,8 +479,10 @@ int main() {
         for (Student &student : studentLists) {
           if (student.getName() == searchName) {
             cout << "Student Found ✅" << endl;
+            cout << "ID   : " << student.getId() << endl;
             cout << "Name : " << student.getName() << endl;
             cout << "Age  : " << student.getAge() << endl;
+            cout << "Gender : " << student.getGender() << endl;
             found = true;
             break;
           }
@@ -464,7 +521,8 @@ int main() {
               return 0;
           }
         }
-        isAdmin = (loggedInUser->getRole() == "admin");
+        isAdmin = (loggedInUser->getRole() == "admin")|| 
+                  (loggedInUser->getRole() == "teacher"); // teacher has same access as admin for this demo
         option = 0; // reset so loop continues
       } else {
         break; // exit program
